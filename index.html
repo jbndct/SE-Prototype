@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Makinarya: 90-Second Blitz</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --panel-bg: #1e1e1e;
+            --highlight: #4a90e2; /* Urban/Rodriguez Color */
+            --rural: #e24a4a; /* Rural/Villafuerte Color */
+            --warning: #f0ad4e;
+            --danger: #d9534f;
+            --text-main: #e0e0e0;
+            --text-dim: #999;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        /* HEADER */
+        .header-stats {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            max-width: 1100px;
+            margin-bottom: 10px;
+            background: #000;
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: 1px solid #333;
+            box-sizing: border-box;
+        }
+
+        .stat-box { font-weight: bold; font-size: 1.1rem; }
+        .timer-val { color: var(--warning); }
+        .pc-val { color: #fff; text-shadow: 0 0 5px rgba(255,255,255,0.5); }
+
+        /* LAYOUT */
+        .game-container {
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            gap: 15px;
+            width: 100%;
+            max-width: 1100px;
+            height: calc(100vh - 80px);
+        }
+
+        /* LEFT PANEL (CONTROLS) */
+        .controls-area {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+
+        /* Scrollbar styling */
+        .controls-area::-webkit-scrollbar { width: 6px; }
+        .controls-area::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+
+        .panel {
+            background-color: var(--panel-bg);
+            padding: 12px;
+            border-radius: 8px;
+            border-left: 4px solid var(--highlight);
+            flex-shrink: 0;
+        }
+        .panel.rural-tech { border-left-color: var(--rural); }
+        .panel.defense { border-left-color: var(--warning); }
+
+        .panel h3 { margin: 0 0 8px 0; font-size: 0.85rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+
+        .btn {
+            background-color: #2c2c2c;
+            color: white;
+            border: 1px solid #333;
+            padding: 12px;
+            margin-bottom: 6px;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            text-align: left;
+            transition: all 0.1s;
+            position: relative;
+        }
+        .btn:hover:not(:disabled) { background-color: #383838; border-color: #555; }
+        .btn:active:not(:disabled) { transform: translateY(1px); }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        .btn strong { display: block; font-size: 0.95rem; margin-bottom: 2px; }
+        .btn small { display: block; font-size: 0.75rem; color: #888; }
+        .btn .cost { position: absolute; top: 12px; right: 10px; font-weight: bold; color: var(--highlight); font-size: 0.9rem; }
+        .btn:disabled .cost { color: #555; }
+
+        /* RIGHT PANEL (MAP) */
+        .map-area {
+            position: relative;
+            background-color: #1a1a1a;
+            border: 2px solid #333;
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        /* DISTRICT NODES */
+        .district-node {
+            position: absolute;
+            width: 120px;
+            height: 120px;
+            background-color: #252525;
+            border: 3px solid #444;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: all 0.3s;
+            z-index: 10;
+        }
+        
+        /* Positions */
+        #d3 { top: 50%; left: 50%; transform: translate(-50%, -50%); border-color: var(--highlight); }
+        #d2 { top: 25%; left: 30%; transform: translate(-50%, -50%); }
+        #d4 { top: 25%; left: 70%; transform: translate(-50%, -50%); }
+        #d5 { top: 75%; left: 65%; transform: translate(-50%, -50%); }
+        #d1 { top: 15%; left: 10%; transform: translate(-50%, -50%); } 
+
+        .district-node.locked { opacity: 0.3; border-style: dashed; }
+        .district-node.unlocked { opacity: 1; border-style: solid; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        
+        .d-name { font-size: 0.8rem; font-weight: bold; margin-bottom: 2px; text-shadow: 1px 1px 2px black; }
+        .d-type { font-size: 0.6rem; text-transform: uppercase; margin-bottom: 4px; padding: 2px 5px; border-radius: 3px; background: rgba(0,0,0,0.5); }
+        .d-urban { color: var(--highlight); border: 1px solid var(--highlight); }
+        .d-rural { color: var(--rural); border: 1px solid var(--rural); }
+        
+        .d-percent { font-size: 1.4rem; font-weight: bold; text-shadow: 0 0 5px rgba(0,0,0,0.8); }
+        .d-bar { width: 70%; height: 5px; background: #333; margin-top: 4px; border-radius: 2px; overflow: hidden; }
+        .d-fill { height: 100%; background: #fff; width: 0%; transition: width 0.2s; }
+        
+        .d-pop { font-size: 0.65rem; color: #777; margin-top: 2px; }
+
+        /* CONNECTOR LINES (SVG) */
+        svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
+        line { stroke: #333; stroke-width: 3; stroke-linecap: round; }
+        
+        /* BUBBLES */
+        .bubble {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background: radial-gradient(circle at 30% 30%, #ffd700, #f0ad4e);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(240, 173, 78, 0.6);
+            animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 100;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.2rem;
+            color: #000;
+            font-weight: bold;
+        }
+        .bubble:active { transform: scale(0.9); }
+
+        /* NOTIFICATIONS / EVENTS */
+        .event-popup {
+            position: absolute;
+            top: 20px; left: 50%;
+            transform: translateX(-50%);
+            background: var(--danger);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 4px;
+            font-weight: bold;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+            z-index: 200;
+            animation: slideDown 0.5s ease-out;
+            display: none;
+            width: 80%;
+            text-align: center;
+        }
+
+        @keyframes slideDown { 0% { top: -50px; } 100% { top: 20px; } }
+
+        /* LOGS */
+        .log-area {
+            position: absolute; bottom: 10px; right: 10px;
+            width: 350px; height: 150px;
+            pointer-events: none;
+            display: flex; flex-direction: column-reverse;
+            gap: 5px;
+            overflow: hidden;
+        }
+        .log-msg { background: rgba(0,0,0,0.8); padding: 8px 12px; border-radius: 4px; font-size: 0.85rem; color: #fff; animation: fadeOut 8s forwards; border-left: 3px solid #555; }
+        .log-msg.alert { border-left-color: var(--danger); }
+        .log-msg.success { border-left-color: #5cb85c; }
+        
+        @keyframes fadeOut { 0% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
+
+        /* END SCREEN */
+        .overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            text-align: center;
+        }
+        .restart-btn { margin-top: 30px; padding: 15px 40px; background: var(--highlight); border: none; font-size: 1.2rem; cursor: pointer; color: white; border-radius: 4px; }
+
+    </style>
+</head>
+<body>
+
+    <div class="event-popup" id="event-popup">BREAKING NEWS</div>
+
+    <div class="header-stats">
+        <div class="stat-box">TIME: <span id="timer" class="timer-val">90.0</span>s</div>
+        <div class="stat-box">TOTAL VOTES: <span id="total-support">0.0%</span></div>
+        <div class="stat-box">CAPITAL: <span id="pc-display" class="pc-val">0</span></div>
+    </div>
+
+    <div class="game-container">
+        <!-- CONTROLS -->
+        <div class="controls-area">
+            
+            <div class="panel">
+                <h3>Urban Machinery (D3, D4)</h3>
+                <button class="btn" id="btn-social" onclick="buyUpgrade('social')">
+                    <strong>Social Media Blitz</strong>
+                    <small>Basic Urban Growth (Fast)</small>
+                    <span class="cost" id="cost-social">12</span>
+                </button>
+                <button class="btn" id="btn-uni" onclick="buyUpgrade('uni')">
+                    <strong>University Forums</strong>
+                    <small>Med Urban Growth (Faster)</small>
+                    <span class="cost" id="cost-uni">35</span>
+                </button>
+                <button class="btn" id="btn-celeb" onclick="buyUpgrade('celeb')">
+                    <strong>Celebrity Endorsement</strong>
+                    <small>Huge Urban Burst (Instant)</small>
+                    <span class="cost" id="cost-celeb">80</span>
+                </button>
+            </div>
+
+            <div class="panel rural-tech">
+                <h3>Rural Machinery (D1, D2, D5)</h3>
+                <button class="btn" id="btn-expand" onclick="buyUpgrade('expand')">
+                    <strong>Expand Territory</strong>
+                    <small>Unlock Adjacent Districts</small>
+                    <span class="cost" id="cost-expand">30</span>
+                </button>
+                <button class="btn" id="btn-radio" onclick="buyUpgrade('radio')">
+                    <strong>Community Radio</strong>
+                    <small>Basic Rural Growth (Fast)</small>
+                    <span class="cost" id="cost-radio">20</span>
+                </button>
+                <button class="btn" id="btn-caravan" onclick="buyUpgrade('caravan')">
+                    <strong>Barangay Caravans</strong>
+                    <small>Med Rural Growth (Faster)</small>
+                    <span class="cost" id="cost-caravan">45</span>
+                </button>
+                <button class="btn" id="btn-clan" onclick="buyUpgrade('clan')">
+                    <strong>Local Clan Alliance</strong>
+                    <small>Huge Rural Burst (Instant)</small>
+                    <span class="cost" id="cost-clan">90</span>
+                </button>
+            </div>
+
+            <div class="panel defense">
+                <h3>Election Defense</h3>
+                <p style="font-size: 0.7rem; color: #888; margin-bottom: 5px;">
+                    Current Drop-off Risk: <span id="risk-val" style="color:var(--rural)">40%</span>
+                </p>
+                <button class="btn" id="btn-fact" onclick="buyUpgrade('fact')">
+                    <strong>Fact Checkers</strong>
+                    <small>Blocks "Fake News" vote drain</small>
+                    <span class="cost" id="cost-fact">25</span>
+                </button>
+                <button class="btn" id="btn-poll" onclick="buyUpgrade('poll')">
+                    <strong>Poll Watchers</strong>
+                    <small>Reduces Election Day drop-off</small>
+                    <span class="cost" id="cost-poll">40</span>
+                </button>
+            </div>
+
+        </div>
+
+        <!-- MAP -->
+        <div class="map-area" id="map-area">
+            <svg id="connections"></svg>
+            <!-- Nodes generated by JS -->
+        </div>
+
+        <div class="log-area" id="log-area"></div>
+    </div>
+
+    <!-- END SCREEN -->
+    <div class="overlay" id="end-screen">
+        <h1 id="end-title">GAME OVER</h1>
+        <p id="end-desc">Loading results...</p>
+        <button class="restart-btn" onclick="location.reload()">Run Campaign Again</button>
+    </div>
+
+    <script>
+        // --- DATA CONFIG (Camarines Sur 2025 Model) ---
+        const DISTRICT_DATA = {
+            d1: { name: "District 1", totalPop: 113645, urbanScore: 0.48, neighbors: ['d2'], x: 15, y: 20 },
+            d2: { name: "District 2", totalPop: 172176, urbanScore: 0.41, neighbors: ['d1', 'd3'], x: 30, y: 30 },
+            d3: { name: "District 3", totalPop: 169430, urbanScore: 0.52, neighbors: ['d2', 'd4', 'd5'], x: 50, y: 50 },
+            d4: { name: "District 4", totalPop: 252582, urbanScore: 0.51, neighbors: ['d3', 'd5'], x: 75, y: 40 },
+            d5: { name: "District 5", totalPop: 261909, urbanScore: 0.38, neighbors: ['d3', 'd4'], x: 60, y: 75 }
+        };
+
+        const BASE_POP_REF = 150000; 
+
+        // --- GAME STATE ---
+        let state = {
+            running: true,
+            timeTotal: 90,
+            timeLeft: 90.0,
+            pc: 0,
+            dropOffReduction: 0,
+            hasFactCheckers: false,
+            
+            // District State
+            districts: {
+                d1: { unlocked: false, percent: 0, growthRate: 0 },
+                d2: { unlocked: false, percent: 0, growthRate: 0 },
+                d3: { unlocked: true, percent: 0, growthRate: 0 },
+                d4: { unlocked: false, percent: 0, growthRate: 0 },
+                d5: { unlocked: false, percent: 0, growthRate: 0 }
+            },
+            
+            // Upgrade Costs
+            costs: {
+                social: 12, uni: 35, celeb: 80,
+                radio: 20, caravan: 45, clan: 90,
+                expand: 30, poll: 40, fact: 25
+            },
+
+            // Events (Compressed for 90s)
+            events: [
+                { time: 75, type: 'attack', name: "Troll Farms", desc: "Online harassment spike. Lost PC.", damagePC: 8 },
+                { time: 60, type: 'attack', name: "Smear Campaign", desc: "Fake news! Lost 5% in Urban.", damagePC: 10, damageVotes: 5, targetType: 'urban' },
+                { time: 50, type: 'blocker', name: "LGU Blockade", desc: "D5 Locked down by incumbents.", target: 'd5' },
+                { time: 40, type: 'attack', name: "Fake News Blast", desc: "Viral deepfakes! Rural support drops.", damagePC: 10, damageVotes: 8, targetType: 'rural' },
+                { time: 25, type: 'attack', name: "Major Scandal", desc: "Establishment leaks doctored photos!", damagePC: 25, damageVotes: 10, targetType: 'all' },
+                { time: 10, type: 'dropoff', name: "Vote Buying Surge", desc: "Massive cash distribution detected!", risk: 15 }
+            ]
+        };
+
+        // --- INIT ---
+        function init() {
+            renderMap();
+            updateUI(0,1);
+            setInterval(gameLoop, 100); 
+        }
+
+        function renderMap() {
+            const map = document.getElementById('map-area');
+            const svg = document.getElementById('connections');
+            
+            // Draw Connections
+            let drawn = new Set();
+            for (let id in DISTRICT_DATA) {
+                let d = DISTRICT_DATA[id];
+                d.neighbors.forEach(nId => {
+                    let key = [id, nId].sort().join('-');
+                    if (!drawn.has(key)) {
+                        let n = DISTRICT_DATA[nId];
+                        let line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                        line.setAttribute('x1', d.x + '%');
+                        line.setAttribute('y1', d.y + '%');
+                        line.setAttribute('x2', n.x + '%');
+                        line.setAttribute('y2', n.y + '%');
+                        svg.appendChild(line);
+                        drawn.add(key);
+                    }
+                });
+            }
+
+            // Draw Nodes
+            for (let id in DISTRICT_DATA) {
+                let d = DISTRICT_DATA[id];
+                let node = document.createElement('div');
+                node.className = `district-node ${id === 'd3' ? 'unlocked' : 'locked'}`;
+                node.id = `node-${id}`;
+                node.style.left = d.x + '%';
+                node.style.top = d.y + '%';
+                
+                let typeText = d.urbanScore > 0.5 ? "URBAN" : "RURAL";
+                let typeClass = d.urbanScore > 0.5 ? "d-urban" : "d-rural";
+
+                node.innerHTML = `
+                    <div class="d-name">${d.name}</div>
+                    <div class="d-type ${typeClass}">${typeText}</div>
+                    <div class="d-percent" id="val-${id}">0%</div>
+                    <div class="d-bar"><div class="d-fill" id="fill-${id}"></div></div>
+                    <div class="d-pop">${(d.totalPop/1000).toFixed(0)}k Voters</div>
+                `;
+                map.appendChild(node);
+            }
+        }
+
+        // --- CORE LOOP ---
+        function gameLoop() {
+            if (!state.running) return;
+
+            // Time & Income (Accelerated)
+            let dt = 0.1;
+            state.timeLeft -= dt;
+            state.pc += 1.2 * dt; // Doubled passive income for blitz speed
+
+            // Events
+            checkEvents();
+
+            // End Check
+            if (state.timeLeft <= 0) {
+                triggerElectionDay();
+                return;
+            }
+
+            // District Logic
+            let totalVotes = 0;
+            let maxVotes = 0;
+
+            for (let id in state.districts) {
+                let dState = state.districts[id];
+                let dStatic = DISTRICT_DATA[id];
+
+                if (dState.unlocked) {
+                    let popFactor = dStatic.totalPop / BASE_POP_REF;
+                    let actualGrowth = (dState.growthRate / popFactor) * dt;
+                    dState.percent = Math.min(100, dState.percent + actualGrowth);
+                }
+
+                totalVotes += (dState.percent / 100) * dStatic.totalPop;
+                maxVotes += dStatic.totalPop;
+            }
+
+            // Spawn Bubbles
+            if (Math.random() < 0.08 * dt * 10) spawnBubble();
+
+            updateUI(totalVotes, maxVotes);
+        }
+
+        function checkEvents() {
+            let currentTime = Math.ceil(state.timeLeft);
+            
+            for (let i = state.events.length - 1; i >= 0; i--) {
+                let ev = state.events[i];
+                if (currentTime === ev.time) {
+                    triggerEvent(ev);
+                    state.events.splice(i, 1);
+                }
+            }
+        }
+
+        function triggerEvent(ev) {
+            const popup = document.getElementById('event-popup');
+            
+            // Logic
+            if (ev.type === 'attack') {
+                if (state.hasFactCheckers) {
+                    log(`Blocked "${ev.name}" with Fact Checkers!`, 'success');
+                    state.hasFactCheckers = false; // Consume defense
+                    popup.style.background = '#5cb85c';
+                    popup.innerText = "ATTACK BLOCKED: " + ev.name;
+                } else {
+                    // Apply PC Damage
+                    if (ev.damagePC) state.pc = Math.max(0, state.pc - ev.damagePC);
+                    
+                    // Apply Vote Damage
+                    if (ev.damageVotes) {
+                        for (let id in state.districts) {
+                            if (!state.districts[id].unlocked) continue;
+                            let dData = DISTRICT_DATA[id];
+                            let isTarget = false;
+                            
+                            if (ev.targetType === 'all') isTarget = true;
+                            else if (ev.targetType === 'urban' && dData.urbanScore > 0.5) isTarget = true;
+                            else if (ev.targetType === 'rural' && dData.urbanScore <= 0.5) isTarget = true;
+
+                            if (isTarget) {
+                                state.districts[id].percent = Math.max(0, state.districts[id].percent - ev.damageVotes);
+                            }
+                        }
+                    }
+
+                    log(`ATTACK: ${ev.name} - Lost Support!`, 'alert');
+                    popup.style.background = '#d9534f';
+                    popup.innerText = `${ev.name}: -${ev.damageVotes || 0}% Support!`;
+                }
+            } 
+            else if (ev.type === 'dropoff') {
+                state.dropOffReduction -= ev.risk; 
+                log(`THREAT: ${ev.desc}`, 'alert');
+                popup.style.background = '#f0ad4e';
+                popup.innerText = ev.name;
+            }
+            else {
+                log(`NEWS: ${ev.desc}`);
+                popup.style.background = '#333';
+                popup.innerText = ev.name;
+            }
+
+            // Animation
+            popup.style.display = 'block';
+            setTimeout(() => { popup.style.display = 'none'; }, 3000);
+        }
+
+        // --- UPGRADES ---
+        function buyUpgrade(type) {
+            if (!state.running) return;
+            let cost = state.costs[type];
+            if (state.pc < cost) return;
+
+            state.pc -= cost;
+            state.costs[type] = Math.ceil(cost * 1.3);
+
+            // Apply Effects (Doubled for Blitz Speed)
+            if (['social', 'uni', 'celeb'].includes(type)) {
+                let power = type === 'social' ? 1.5 : type === 'uni' ? 3.0 : 6.0;
+                applyGrowth(power, 'urban');
+                log(`Urban Outreach (${type}) active.`);
+            } 
+            else if (['radio', 'caravan', 'clan'].includes(type)) {
+                let power = type === 'radio' ? 1.5 : type === 'caravan' ? 3.0 : 5.0;
+                applyGrowth(power, 'rural');
+                log(`Rural Ops (${type}) active.`);
+            }
+            else if (type === 'expand') {
+                expandTerritory();
+            }
+            else if (type === 'poll') {
+                state.dropOffReduction += 10;
+                log("Poll Watchers hired. Security up.");
+            }
+            else if (type === 'fact') {
+                state.hasFactCheckers = true;
+                log("Fact Checkers on standby.");
+            }
+
+            updateUI(0,1);
+        }
+
+        function applyGrowth(amount, targetType) {
+            for (let id in state.districts) {
+                if (!state.districts[id].unlocked) continue;
+                
+                let dData = DISTRICT_DATA[id];
+                let multiplier = targetType === 'urban' ? dData.urbanScore : (1.0 - dData.urbanScore);
+                state.districts[id].growthRate += amount * multiplier;
+            }
+        }
+
+        function expandTerritory() {
+            let expanded = false;
+            for (let id in state.districts) {
+                if (state.districts[id].unlocked) {
+                    DISTRICT_DATA[id].neighbors.forEach(nid => {
+                        if (!state.districts[nid].unlocked) {
+                            state.districts[nid].unlocked = true;
+                            document.getElementById(`node-${nid}`).className = 'district-node unlocked';
+                            expanded = true;
+                        }
+                    });
+                }
+            }
+            if(expanded) log("Campaign expanded to new districts.");
+            else log("All districts already reachable.");
+        }
+
+        function spawnBubble() {
+            const map = document.getElementById('map-area');
+            const b = document.createElement('div');
+            b.className = 'bubble';
+            b.innerText = "+";
+            b.style.left = (10 + Math.random() * 80) + "%";
+            b.style.top = (10 + Math.random() * 80) + "%";
+
+            b.onclick = (e) => {
+                e.stopPropagation();
+                let amt = Math.floor(Math.random() * 6) + 4;
+                state.pc += amt;
+                log(`Grassroots: +${amt} PC`, 'success');
+                b.remove();
+            };
+            
+            map.appendChild(b);
+            setTimeout(() => { if(b.parentNode) b.remove(); }, 2000);
+        }
+
+        function log(msg, type = '') {
+            const area = document.getElementById('log-area');
+            const div = document.createElement('div');
+            div.className = `log-msg ${type}`;
+            div.innerText = msg;
+            area.appendChild(div);
+            if (area.children.length > 5) area.firstChild.remove();
+        }
+
+        // --- UI ---
+        function updateUI(curr, max) {
+            // Stats
+            document.getElementById('timer').innerText = state.timeLeft.toFixed(1);
+            if(state.timeLeft < 15) document.getElementById('timer').style.color = '#d9534f';
+            
+            let percent = (curr/max)*100 || 0;
+            document.getElementById('total-support').innerText = percent.toFixed(2) + "%";
+            document.getElementById('pc-display').innerText = Math.floor(state.pc);
+            
+            let risk = Math.max(0, 40 - state.dropOffReduction);
+            document.getElementById('risk-val').innerText = risk + "%";
+
+            // Buttons
+            for(let key in state.costs) {
+                let btn = document.getElementById(`btn-${key}`);
+                if(btn) {
+                    btn.disabled = state.pc < state.costs[key];
+                    document.getElementById(`cost-${key}`).innerText = state.costs[key];
+                    if (key === 'fact' && state.hasFactCheckers) btn.disabled = true;
+                }
+            }
+
+            // Map
+            for(let id in state.districts) {
+                let d = state.districts[id];
+                let elVal = document.getElementById(`val-${id}`);
+                let elFill = document.getElementById(`fill-${id}`);
+                
+                elVal.innerText = d.percent.toFixed(1) + "%";
+                elFill.style.width = d.percent + "%";
+                
+                if (d.percent > 50) elFill.style.background = "var(--highlight)";
+            }
+        }
+
+        // --- ENDGAME ---
+        function triggerElectionDay() {
+            state.running = false;
+            document.getElementById('end-screen').style.display = 'flex';
+            
+            setTimeout(() => {
+                let totalVotes = 0;
+                let maxVotes = 0;
+                let dropOff = Math.max(0, 40 - state.dropOffReduction);
+
+                for (let id in state.districts) {
+                    let dState = state.districts[id];
+                    let dStatic = DISTRICT_DATA[id];
+                    
+                    let finalPercent = Math.max(0, dState.percent - dropOff);
+                    totalVotes += (finalPercent / 100) * dStatic.totalPop;
+                    maxVotes += dStatic.totalPop;
+                }
+
+                let finalScore = (totalVotes / maxVotes) * 100;
+                let title = document.getElementById('end-title');
+                let desc = document.getElementById('end-desc');
+
+                if (finalScore > 50.1) {
+                    title.innerText = "VICTORY";
+                    title.style.color = "#4a90e2";
+                    desc.innerHTML = `You won with <strong>${finalScore.toFixed(2)}%</strong>!<br>The Establishment has been dismantled.`;
+                } else {
+                    title.innerText = "DEFEAT";
+                    title.style.color = "#d9534f";
+                    desc.innerHTML = `You finished with <strong>${finalScore.toFixed(2)}%</strong>.<br>Vote buying cost you ${dropOff}% of your base.`;
+                }
+
+            }, 2000);
+        }
+
+        init();
+    </script>
+</body>
+</html>
